@@ -1,0 +1,50 @@
+html,body
+{
+width:100%;
+height:100vh;
+box-sizing:border-box;
+}
+
+body
+{
+margin: 0;
+padding: 0em;
+}
+
+canvas
+{
+width:100%;
+height:100%;
+}
+
+#text-cont
+{
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+#text
+{
+max-width: 70%;
+font-size: 2em;
+text-align: center;
+background: #ffffffbf;
+box-sizing: border-box;
+padding: 2em;
+border: 0.2em solid #00796B;
+border-radius: 1em;
+box-shadow: 0 0 10px #004D40;
+transition-duration: 1s;
+opacity: 0;
+}
+
+#text.active
+{
+opacity: 1;
+}
