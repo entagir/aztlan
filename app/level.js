@@ -56,6 +56,7 @@ class Player {
     jumpSpeed = 20;
     onGround = false;
     onJump = false;
+    onWater = false;
     state = 0;
     dir = 0;
 
@@ -108,16 +109,20 @@ const levelLoop = (function() {
 
     let g = 0.8;
 
+    let world, level;
+
     let tileset;
 
     let tiles = [];
     const tileSize = 21;
 
-    let layers = []; // Тайловые слои уровня
-    let map; // Ссылка на тайловый слой "Platforms" для обработки столковений (основной слой уровня)
+    let layers = []; // Tile layers of level
+    let layerBuffers = []; // Buffers for static layers
+    let layersOfObject = []; // Object layers of level
+    let map; // Tile layer "Platforms"
 
-    let tileCount = 20; // Количество отображаемых тайлов по высоте (на один экран) - масштаб игры
-    let size = 0; // Размер тайла в пикселях (вычисляется в зависимости от viewport)
+    let tileCount = 20; // Tile count to screen height
+    let size = 0; // Tile size in px
 
     let score = 0;
 
@@ -125,28 +130,34 @@ const levelLoop = (function() {
 
     let keys = { 'right': false, 'left': false, 'up': false };
 
-    function loadTileSet(img, tileSize) {
+    function loadTileSet(img, tileSize, size) {
         tiles = [];
 
         for (let i = 0; i < img.height / tileSize; i++) {
             for (let j = 0; j < img.width / tileSize; j++) {
-                tiles.push(getCanvasBuffer(img, j * tileSize, i * tileSize, tileSize, tileSize));
+                tiles.push(getCanvasBuffer(img, j * tileSize, i * tileSize, tileSize, tileSize, size, size));
             }
         }
     }
 
     function loadLevelData(json) {
         for (const layer of json.layers) {
-            let tempLayer = [];
+            if (layer.type == 'tilelayer') {
+                let tempLayer = [];
 
-            const data = layer.data;
-            const width = parseInt(layer.width);
-
-            for (let i = 0; i < data.length; i += width) {
-                tempLayer.push(data.slice(i, i + width));
+                const data = layer.data;
+                const width = parseInt(layer.width);
+    
+                for (let i = 0; i < data.length; i += width) {
+                    tempLayer.push(data.slice(i, i + width));
+                }
+    
+                layers[layer.name] = tempLayer;
             }
 
-            layers[layer.name] = tempLayer;
+            if (layer.type == 'objectgroup') {
+                layersOfObject[layer.name] = layer.objects;
+            }
         }
 
         map = layers['Platforms'];
@@ -158,43 +169,73 @@ const levelLoop = (function() {
         canvas = config.canvas;
         ctx = config.ctx;
         appConfig = config.options || {};
+        
+        if (!config.world) config.world = 1;
+        if (!config.level) config.level = 1;
 
         isPause = isStop = false;
         score = 0;
         keys = { 'right': false, 'left': false, 'up': false };
         offset = { x: 0, y: 0 };
+        layers = [];
+        layersOfObject = [];
 
         document.body.addEventListener('keydown', keydown, false);
         document.body.addEventListener('keyup', keyup, false);
 
-        const level = await fetch('res/aztlan1.json');
-        const levelJSON = await level.json();
-        loadLevelData(levelJSON);
+        world = config.world;
+        level = config.level;
 
-        tileset = new Image();
-        tileset.src = 'res/tilemap_packed.png';
+        size = parseInt(canvas.height / tileCount);
 
-        tileset.onload = function() {
-            loadTileSet(tileset, tileSize);
+        const levelData = await Loader.load('res/level/aztlan_' + world + '_' + level + '.json', 'json');
+        loadLevelData(levelData);
 
-            player.anims['stay'] = new AnimTiled([tiles[19]]);
-            player.anims['run'] = new AnimTiled([tiles[26], tiles[27], tiles[28], tiles[29]]);
-            player.anims['jump'] = new AnimTiled([tiles[21]]);
+        tileset = await Loader.load('res/tileset/tilemap_packed.png', 'img');
+    
+        loadTileSet(tileset, tileSize, size);
 
-            size = parseInt(canvas.height / tileCount);
+        /* Generate tile layer buffers */
+        if (layers['Background']) layerBuffers['Background'] = getTileLayerBuffer(layers['Background']);
+        if (layers['Water']) layerBuffers['Water'] = getTileLayerBuffer(layers['Water']);
+        if (layers['Platforms']) layerBuffers['Platforms'] = getTileLayerBuffer(layers['Platforms']);
+        if (layers['Overlay']) layerBuffers['Overlay'] = getTileLayerBuffer(layers['Overlay']);
 
-            player.w = size;
-            player.h = size;
-            player.x = 0;
-            player.y = size * (map.length - 2);
+        /* Create player animations */
+        player.anims['stay'] = new AnimTiled([tiles[19]]);
+        player.anims['run'] = new AnimTiled([tiles[26], tiles[27], tiles[28], tiles[29]]);
+        player.anims['jump'] = new AnimTiled([tiles[21]]);
 
-            lastUpdate = performance.now();
-            update();
+        /* Player deafult params */
+        player.w = size;
+        player.h = size;
+        player.x = 0;
+        player.y = size * (map.length - 2);
+
+        /* Add dynamic objects */
+        if (layersOfObject['Objects']) {
+            for (const object of layersOfObject['Objects']) {
+                if (object['class'] == 'Player') {
+                    player.x = object.x * size / tileSize;
+                    player.y = object.y * size / tileSize;
+                }
+    
+                if (object['class'] == 'Lava') {
+    
+                }
+    
+                if (object['class'] == 'Finish') {
+    
+                }
+            }
         }
+
+        lastUpdate = performance.now();
+        update();
     }
 
     function stop() {
-        console.log('stop', updateId);
+        //console.log('stop', updateId);
         cancelAnimationFrame(updateId);
         isStop = true;
 
@@ -209,12 +250,17 @@ const levelLoop = (function() {
             fps = 1 / delta;
             debugInfoUpdate = 0;
         } else { debugInfoUpdate += delta; }
-        if (delta > 1 / 20) delta = 1 / 20;
+        if (delta > 1 / 20) delta = 1 / 20; // Trottle
 
         /* Update player */
         if (keys['right']) {
             if ((player.state != 1) || (player.dir != 0)) {
-                player.vx = player.speed * size;
+                if (player.onWater) {
+                    player.vx = player.speed / 1.5 * size;
+                }
+                else {
+                    player.vx = player.speed * size;
+                }
             }
         }
 
@@ -223,14 +269,24 @@ const levelLoop = (function() {
                 player.vx = 0;
             } else {
                 if ((player.state != 1) || (player.dir != 1)) {
-                    player.vx = -1 * player.speed * size;
+                    if (player.onWater) {
+                        player.vx = -1 * player.speed / 1.5 * size;
+                    }
+                    else {
+                        player.vx = -1 * player.speed * size;
+                    }
                 }
             }
         }
 
         if (keys['up']) {
             if (player.onGround) {
-                player.vy = -1 * player.jumpSpeed * size;
+                if (player.onWater) {
+                    player.vy = -1 * player.jumpSpeed / 1.5 * size;
+                }
+                else {
+                    player.vy = -1 * player.jumpSpeed * size;
+                }
             }
         }
 
@@ -240,13 +296,55 @@ const levelLoop = (function() {
         if (!player.onGround) {
             player.vy += g * size;
 
-            if (player.vy > 12 * size) {
-                player.vy = 12 * size;
+            if (player.onWater) {
+                player.vy -= g / 1.3 * size;
+
+                if (player.vy > 4 * size) {
+                    player.vy = 6 * size;
+                }
+            }
+            else {
+                if (player.vy > 12 * size) {
+                    player.vy = 12 * size;
+                }
             }
         }
         player.y += player.vy * delta;
         col(1);
 
+        /** Update player state */
+        if (player.onGround) {
+            if (player.vx == 0) { player.state = 0; }
+            if ((player.vx != 0) || (player.vx == 0 && (keys['right'] || keys['left']))) {
+                if (!(keys['right'] && keys['left'])) {
+                    player.state = 1;
+                }
+            }
+        } else {
+            player.state = 2;
+        }
+
+        player.onWater = false;
+        for (let i = parseInt(player.y / size); i < (player.y + player.h) / size; i++) {
+            for (let j = parseInt(player.x / size); j < (player.x + player.w) / size; j++) {
+                if (layers['Water'] && layers['Water'][i][j] != 0) {
+                    player.onWater = true;
+                }
+            }
+        }
+
+        if (player.vx > 0 || (keys['right'] && !keys['left'])) {
+            player.dir = 0;
+        } else if (player.vx < 0 || (!keys['right'] && keys['left'])) {
+            player.dir = 1;
+        }
+
+        /* Update animations */
+        for (const anim in player.anims) {
+            player.anims[anim].update(delta);
+        }
+
+        /** Update camera */
         const playerCenter = { x: player.x + player.w / 2, y: player.y + player.h / 2 };
         if (playerCenter.x > canvas.width / 2) {
             if (playerCenter.x + canvas.width / 2 < map[0].length * size) {
@@ -261,28 +359,6 @@ const levelLoop = (function() {
             } else {
                 offset.y = map.length * size - canvas.height;
             }
-        }
-
-        if (player.onGround) {
-            if (player.vx == 0) { player.state = 0; }
-            if ((player.vx != 0) || (player.vx == 0 && (keys['right'] || keys['left']))) {
-                if (!(keys['right'] && keys['left'])) {
-                    player.state = 1;
-                }
-            }
-        } else {
-            player.state = 2;
-        }
-
-        if (player.vx > 0 || (keys['right'] && !keys['left'])) {
-            player.dir = 0;
-        } else if (player.vx < 0 || (!keys['right'] && keys['left'])) {
-            player.dir = 1;
-        }
-
-        /* Update animations */
-        for (const anim in player.anims) {
-            player.anims[anim].update(delta);
         }
 
         /* Draw and request next update */
@@ -315,12 +391,15 @@ const levelLoop = (function() {
 
                 if (map[i][j] == 79) {
                     score++;
+
                     map[i][j] = 0;
+                    layerBuffers['Platforms'].getContext('2d').clearRect(size * j, size * i, size, size);
+
                     continue;
                 }
 
                 if (map[i][j] == 254) {
-                    appConfig.setLoop('menu', { final: true });
+                    appConfig.setLoop('menu');
                 }
 
                 if (dir == 0) {
@@ -367,8 +446,10 @@ const levelLoop = (function() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         /* Level layers */
-        drawLayer(layers['Background']);
-        drawLayer(layers['Platforms']);
+        if (layers['Background']) ctx.drawImage(layerBuffers['Background'], - offset.x, - offset.y);
+        if (layers['Water']) ctx.drawImage(layerBuffers['Water'], - offset.x, - offset.y);
+        if (layers['Platforms']) ctx.drawImage(layerBuffers['Platforms'], - offset.x, - offset.y);
+        if (layers['Overlay']) ctx.drawImage(layerBuffers['Overlay'], - offset.x, - offset.y);
 
         if (appConfig.debug) {
             /* Level grid */
@@ -413,51 +494,68 @@ const levelLoop = (function() {
             ctx.textBaseline = 'middle';
             ctx.textAlign = 'center';
             ctx.font = 'bold ' + 1 / 2 * size + 'px Arial';
-            ctx.fillText('State: ' + player.state + '; OnGround: ' + player.onGround + '; vx: ' + player.vx + '; vy: ' + player.vy + ';', canvas.width / 2, 1 / 2 * size);
+            ctx.fillText('State: ' + player.state + '; OnGround: ' + player.onGround + '; OnWater: ' + player.onWater + '; vx: ' + player.vx + '; vy: ' + player.vy + ';', canvas.width / 2, 1 / 2 * size, canvas.width / 2);
 
             /* FPS */
             ctx.textAlign = 'right';
             ctx.fillText('FPS: ' + fps.toFixed(1), canvas.width - 1 / 2 * size, 1 / 2 * size);
         }
+    }
 
-        /* Draw tile layer */
-        function drawLayer(layer) {
-            for (let i in layer) {
-                for (let j in layer[i]) {
-                    if (layer[i][j] == '0') {
-                        continue;
-                    }
-
-                    const flipped_horizontally = (layer[i][j] & FLIPPED_HORIZONTALLY_FLAG);
-                    const flipped_vertically = (layer[i][j] & FLIPPED_VERTICALLY_FLAG);
-                    const flipped_diagonally = (layer[i][j] & FLIPPED_DIAGONALLY_FLAG);
-                    const rotated_hex120 = (layer[i][j] & ROTATED_HEXAGONAL_120_FLAG);
-
-                    const tileId = layer[i][j] & ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG | ROTATED_HEXAGONAL_120_FLAG);
-
-                    if (flipped_vertically || flipped_horizontally) {
-                        ctx.translate(size * j - offset.x + (flipped_horizontally ? size : 0), size * i - offset.y + (flipped_vertically ? size : 0));
-                        ctx.scale((flipped_horizontally ? -1 : 1), (flipped_vertically ? -1 : 1));
-                        ctx.drawImage(tiles[tileId - 1], 0, 0, size, size);
-                        ctx.scale(1, 1);
-                        ctx.setTransform(1, 0, 0, 1, 0, 0);
-                    } else {
-                        ctx.drawImage(tiles[tileId - 1], size * j - offset.x, size * i - offset.y, size, size);
-                    }
-
-                    if (flipped_diagonally) { console.warn('TileLoader: FLIPPED_DIAGONALLY_FLAG not support'); }
+    /* Draw tile layer */
+    function drawLayer(ctx, layer) {
+        for (let i in layer) {
+            for (let j in layer[i]) {
+                if (layer[i][j] == '0') {
+                    continue;
                 }
+
+                const flipped_horizontally = (layer[i][j] & FLIPPED_HORIZONTALLY_FLAG);
+                const flipped_vertically = (layer[i][j] & FLIPPED_VERTICALLY_FLAG);
+                const flipped_diagonally = (layer[i][j] & FLIPPED_DIAGONALLY_FLAG);
+                const rotated_hex120 = (layer[i][j] & ROTATED_HEXAGONAL_120_FLAG);
+
+                const tileId = layer[i][j] & ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG | ROTATED_HEXAGONAL_120_FLAG);
+
+                if (flipped_vertically || flipped_horizontally) {
+                    ctx.translate(size * j - offset.x + (flipped_horizontally ? size : 0), size * i - offset.y + (flipped_vertically ? size : 0));
+                    ctx.scale((flipped_horizontally ? -1 : 1), (flipped_vertically ? -1 : 1));
+                    ctx.drawImage(tiles[tileId - 1], 0, 0);
+                    ctx.scale(1, 1);
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                } else {
+                    ctx.drawImage(tiles[tileId - 1], size * j - offset.x, size * i - offset.y);
+                }
+
+                if (flipped_diagonally) { console.warn('TileLoader: FLIPPED_DIAGONALLY_FLAG not support'); }
             }
         }
     }
 
-    function getCanvasBuffer(img, x, y, w, h) {
+    function getTileLayerBuffer(layer) {
+        const bufferCanvas = document.createElement('canvas');
+        bufferCanvas.width = layer[0].length * size;
+        bufferCanvas.height = layer.length * size;
+        const bufferCtx = bufferCanvas.getContext('2d');
+
+        drawLayer(bufferCtx, layer);
+
+        return bufferCanvas;
+    }
+
+    function getCanvasBuffer(img, x, y, w, h, bufferW, bufferH) {
         const frameCanvas = document.createElement('canvas');
-        frameCanvas.width = w;
-        frameCanvas.height = h;
+        frameCanvas.width = bufferW;
+        frameCanvas.height = bufferH;
         const frameCtx = frameCanvas.getContext('2d');
 
-        frameCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = w;
+        tempCanvas.height = h;
+        tempCanvas.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h);
+
+        frameCtx.drawImage(tempCanvas, 0, 0, bufferW, bufferH);
+        // frameCtx.drawImage(img, x, y, w, h, 0, 0, bufferW, bufferH);
 
         return frameCanvas;
     }
@@ -473,6 +571,10 @@ const levelLoop = (function() {
 
         if (e.code == 'ArrowUp') {
             keys['up'] = true;
+        }
+
+        if (e.code == 'Escape') {
+            keys['up'] = appConfig.setLoop('menu');
         }
     }
 
