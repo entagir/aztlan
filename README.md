@@ -6,7 +6,7 @@
 <h2 align="center"><a  href="https://aztlan.entagir.ru">aztlan.entagir.ru</a></h2>
 
 ## Description
-MindEditor is a classic 2d platformer.
+Aztlan is a classic 2d platformer.
 
 The project is developed in pure javascript and uses HTML5 Canvas for rendering.
 
