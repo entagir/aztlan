@@ -78,6 +78,7 @@ class Player {
         this.anims[anim].draw(ctx, this.x - offset.x, this.y - offset.y, this.w, this.h, this.dir != 0);
 
         if (appConfig.debug) {
+            ctx.lineWidth = 2;
             ctx.strokeStyle = '#ff0000';
             ctx.beginPath();
             ctx.moveTo(this.x - offset.x + this.w / 2, this.y - offset.y);
@@ -188,11 +189,10 @@ const levelLoop = (function() {
 
         size = parseInt(canvas.height / tileCount);
 
-        const levelData = await Loader.load('res/level/aztlan_' + world + '_' + level + '.json', 'json');
+        const levelData = await Loader.load('assets/level/aztlan_' + world + '_' + level + '.json', 'json');
         loadLevelData(levelData);
 
-        tileset = await Loader.load('res/tileset/tilemap_packed.png', 'img');
-    
+        tileset = await Loader.load('assets/tileset/tilemap_packed.png', 'img');
         loadTileSet(tileset, tileSize, size);
 
         /* Generate tile layer buffers */
@@ -453,6 +453,7 @@ const levelLoop = (function() {
 
         if (appConfig.debug) {
             /* Level grid */
+            ctx.lineWidth = 2;
             ctx.strokeStyle = '#ccc';
             ctx.beginPath();
             for (let i = 0; i < map.length; i++) {
@@ -471,14 +472,22 @@ const levelLoop = (function() {
         player.draw(ctx, offset, appConfig);
 
         /* Score */
-        ctx.fillStyle = '#000000';
+        ctx.setLineDash([]);
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.lineWidth = 8;
+        ctx.fillStyle = '#f9f9f9';
+        ctx.strokeStyle = '#1c1c1c';
+
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
-        ctx.font = 'bold ' + 1 / 2 * size + 'px Arial';
+        ctx.font = 'bold ' + 1 / 2 * size + 'px bit';
+        ctx.strokeText('Score: ' + score, 1 / 2 * size, 1 / 2 * size);
         ctx.fillText('Score: ' + score, 1 / 2 * size, 1 / 2 * size);
 
         if (appConfig.debug) {
             /* Center */
+            ctx.lineWidth = 2;
             ctx.strokeStyle = '#ff0000';
             ctx.beginPath();
             ctx.moveTo(canvas.width / 2, 0);
@@ -490,14 +499,17 @@ const levelLoop = (function() {
             ctx.stroke();
 
             /* State */
-            ctx.fillStyle = '#000000';
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = '#1c1c1c';
             ctx.textBaseline = 'middle';
             ctx.textAlign = 'center';
-            ctx.font = 'bold ' + 1 / 2 * size + 'px Arial';
-            ctx.fillText('State: ' + player.state + '; OnGround: ' + player.onGround + '; OnWater: ' + player.onWater + '; vx: ' + player.vx + '; vy: ' + player.vy + ';', canvas.width / 2, 1 / 2 * size, canvas.width / 2);
+            ctx.font = 'bold ' + 1 / 2 * size + 'px bit';
+            ctx.strokeText('State: ' + player.state + '; OnGround: ' + player.onGround + '; OnWater: ' + player.onWater + '; vx: ' + player.vx.toFixed(1) + '; vy: ' + player.vy .toFixed(1)+ ';', canvas.width / 2, 1 / 2 * size, canvas.width / 2);
+            ctx.fillText('State: ' + player.state + '; OnGround: ' + player.onGround + '; OnWater: ' + player.onWater + '; vx: ' + player.vx.toFixed(1) + '; vy: ' + player.vy.toFixed(1) + ';', canvas.width / 2, 1 / 2 * size, canvas.width / 2);
 
             /* FPS */
             ctx.textAlign = 'right';
+            ctx.strokeText('FPS: ' + fps.toFixed(1), canvas.width - 1 / 2 * size, 1 / 2 * size);
             ctx.fillText('FPS: ' + fps.toFixed(1), canvas.width - 1 / 2 * size, 1 / 2 * size);
         }
     }

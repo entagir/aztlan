@@ -44,10 +44,10 @@ const menuLoop = (function(){
         document.body.addEventListener('keydown', keydownBind, false);
         document.body.addEventListener('keyup', keyupBind, false);
 
-        const levelData = await Loader.load('res/level/main_menu.json', 'json');
+        const levelData = await Loader.load('assets/level/main_menu.json', 'json');
         loadLevelData(levelData);
 
-        tileset = await Loader.load('res/tileset/tilemap_packed.png', 'img');
+        tileset = await Loader.load('assets/tileset/tilemap_packed.png', 'img');
     
         loadTileSet(tileset, 21);
 
@@ -80,16 +80,20 @@ const menuLoop = (function(){
         drawLayer(layers['Background']);
         drawLayer(layers['Layer1']);
 
-        ctx.fillStyle = '#000';
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.lineWidth = 8;
+        ctx.fillStyle = '#f9f9f9';
+        ctx.strokeStyle = '#1c1c1c';
 
         /* Top text */
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
-        ctx.font = 'bold ' + 1 * size + 'px Arial';
-        ctx.fillText('Aztlan', canvas.width / 2, size);
+        ctx.font = 'bold ' + 1 * size + 'px bit';
+
         ctx.strokeText('Aztlan', canvas.width / 2, size);
+        ctx.fillText('Aztlan', canvas.width / 2, size);
 
         /* Menu */
         const padding = size / 2;
@@ -97,8 +101,8 @@ const menuLoop = (function(){
         for (let [i, item] of menu.entries()) {
             const offsetY = -(menu.length / 2 - i) * (size + padding) + (size + padding) / 2;
 
-            ctx.fillText(item.title, canvas.width / 2, canvas.height / 2 + offsetY);
             ctx.strokeText(item.title, canvas.width / 2, canvas.height / 2 + offsetY);
+            ctx.fillText(item.title, canvas.width / 2, canvas.height / 2 + offsetY);
 
             if (menuSelected == i) {
                 const width = ctx.measureText(item.title).width;
@@ -122,13 +126,13 @@ const menuLoop = (function(){
         ];
 
         ctx.textAlign = 'left';
-        ctx.font = 'bold ' + 0.8 * size + 'px Arial';
+        ctx.font = 'bold ' + 0.8 * size + 'px bit';
 
         for (const [i, line] of controlsText.entries()) {
             const offsetY = -(controlsText.length / 2 - i) * (size + padding) + (size + padding) / 2;
 
-            ctx.fillText(line, size, canvas.height / 2 + offsetY);
             ctx.strokeText(line, size, canvas.height / 2 + offsetY);
+            ctx.fillText(line, size, canvas.height / 2 + offsetY);
         }
 
         /* Info */
@@ -137,22 +141,22 @@ const menuLoop = (function(){
         ];
 
         ctx.textAlign = 'right';
-        ctx.font = 'bold ' + 0.8 * size + 'px Arial';
 
         for (const [i, line] of infoText.entries()) {
             const offsetY = -(infoText.length / 2 - i) * (size + padding) + (size + padding) / 2;
 
-            ctx.fillText(line, canvas.width - size, canvas.height / 2 + offsetY);
             ctx.strokeText(line, canvas.width - size, canvas.height / 2 + offsetY);
+            ctx.fillText(line, canvas.width - size, canvas.height / 2 + offsetY);
         }
 
         /* Bottom text */
-        // ctx.font = 'bold ' + 0.8 * size + 'px Arial';
+        // ctx.font = 'bold ' + 0.8 * size + 'px bit';
         // ctx.fillText('Press Enter', canvas.width / 2, canvas.height - size);
         // ctx.strokeText('Press Enter', canvas.width / 2, canvas.height - size);
 
         if (appConfig.debug) {
             /* Center */
+            ctx.lineWidth = 2;
             ctx.strokeStyle = '#ff0000';
             ctx.beginPath();
             ctx.moveTo(canvas.width / 2, 0);
@@ -174,8 +178,8 @@ const menuLoop = (function(){
             ctx.lineTo(x - size - margin, y + size / 2);
 
             ctx.closePath();
-            ctx.fill();
             ctx.stroke();
+            ctx.fill();
         }
     }
 
