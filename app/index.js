@@ -2,7 +2,10 @@ const App = {
     canvas: null,
     ctx: null,
 
-    options: {debug: false},
+    options: {
+        debug: false,
+        tileCount: 20, // Tile count to screen height
+    },
 
     loops: {
         'menu': menuLoop,
@@ -13,7 +16,7 @@ const App = {
     },
     loop: 'menu',
 
-    init() {
+    async init () {
         console.info('Aztlan 0.1');
 
         this.canvas = document.querySelector('canvas');
@@ -24,7 +27,20 @@ const App = {
 
         this.options.setLoop = this.setLoop.bind(this);
 
+        const tileset = await Loader.load('assets/tileset/tilemap_packed.png', 'img');
+        this.options.tiles = tileset;
+        this.options.tileSize = 21;
+
         this.setLoop(this.loop);
+
+        window.addEventListener('resize', function() {
+            App.canvas.width = App.canvas.clientWidth;
+            App.canvas.height = App.canvas.clientHeight;
+
+            if (App.loop) {
+                App.loops[App.loop].onresize();
+            } 
+        });
     },
 
     setLoop(loopName, config={}) {
@@ -32,6 +48,7 @@ const App = {
         
         config.canvas = this.canvas;
         config.ctx = this.ctx;
+        config.tiles = this.options.tiles;
         config.options = this.options;
 
         this.loops[this.loop].stop();

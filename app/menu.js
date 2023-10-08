@@ -2,6 +2,7 @@
 
 const menuLoop = (function(){
     let layers = [];
+    let tiles = [];
     let size = 1;
     let offset = {x:0, y:0};
     let keydownBind = null;
@@ -31,11 +32,12 @@ const menuLoop = (function(){
     ];
     let menuSelected = 0;
     let final, appConfig;
+    let canvas, ctx;
 
     async function load(config = {}) {
         canvas = config.canvas;
         ctx = config.ctx;
-        final = config.final;
+        tiles = config.tiles;
         appConfig = config.options || {};
 
         keydownBind = keydown.bind(this);
@@ -45,18 +47,12 @@ const menuLoop = (function(){
         document.body.addEventListener('keyup', keyupBind, false);
 
         const levelData = await Loader.load('assets/level/main_menu.json', 'json');
-        loadLevelData(levelData);
+        layers = Renderer.loadLevelData(levelData).layers;
 
-        tileset = await Loader.load('assets/tileset/tilemap_packed.png', 'img');
-    
-        loadTileSet(tileset, 21);
-
-        size = parseInt(canvas.height / 20);
-
+        size = parseInt(canvas.height / appConfig.tileCount);
         offset.x = (layers['Layer1'][0].length * size - canvas.width) / 2;
         offset.y = layers['Layer1'].length * size - canvas.height;
-
-        draw(canvas, ctx, final);
+        draw(canvas, ctx);
     }
 
     function pause() {}
@@ -71,19 +67,17 @@ const menuLoop = (function(){
     }
 
     function draw(canvas, ctx, final) {
-        let size = parseInt(canvas.height / 20);
-
         /* Background */
         ctx.fillStyle = '#6b8cff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        drawLayer(layers['Background']);
-        drawLayer(layers['Layer1']);
+        Renderer.drawLayer(ctx, layers['Background'], tiles, size, offset);
+        Renderer.drawLayer(ctx, layers['Layer1'], tiles, size, offset);
 
         ctx.setLineDash([]);
         ctx.lineJoin = 'round';
         ctx.miterLimit = 2;
-        ctx.lineWidth = 8;
+        ctx.lineWidth = size / 5;
         ctx.fillStyle = '#f9f9f9';
         ctx.strokeStyle = '#1c1c1c';
 
@@ -201,81 +195,16 @@ const menuLoop = (function(){
 
     function keyup(e) {}
 
-    /* CopyPaste from level.js */
-
-    /* Draw tile layer */
-    function drawLayer(layer) {
-        const FLIPPED_HORIZONTALLY_FLAG = 0x80000000;
-        const FLIPPED_VERTICALLY_FLAG = 0x40000000;
-        const FLIPPED_DIAGONALLY_FLAG = 0x20000000;
-        const ROTATED_HEXAGONAL_120_FLAG = 0x10000000;
-
-        for (let i in layer) {
-            for (let j in layer[i]) {
-                if (layer[i][j] == '0') {
-                    continue;
-                }
-
-                const flipped_horizontally = (layer[i][j] & FLIPPED_HORIZONTALLY_FLAG);
-                const flipped_vertically = (layer[i][j] & FLIPPED_VERTICALLY_FLAG);
-                const flipped_diagonally = (layer[i][j] & FLIPPED_DIAGONALLY_FLAG);
-                const rotated_hex120 = (layer[i][j] & ROTATED_HEXAGONAL_120_FLAG);
-
-                const tileId = layer[i][j] & ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG | ROTATED_HEXAGONAL_120_FLAG);
-
-                if (flipped_vertically || flipped_horizontally) {
-                    ctx.translate(size * j - offset.x + (flipped_horizontally ? size : 0), size * i - offset.y + (flipped_vertically ? size : 0));
-                    ctx.scale((flipped_horizontally ? -1 : 1), (flipped_vertically ? -1 : 1));
-                    ctx.drawImage(tiles[tileId - 1], 0, 0, size, size);
-                    ctx.scale(1, 1);
-                    ctx.setTransform(1, 0, 0, 1, 0, 0);
-                } else {
-                    ctx.drawImage(tiles[tileId - 1], size * j - offset.x, size * i - offset.y, size, size);
-                }
-
-                if (flipped_diagonally) { console.warn('TileLoader: FLIPPED_DIAGONALLY_FLAG not support'); }
-            }
-        }
-    }
-
-    function loadTileSet(img, tileSize) {
-        tiles = [];
-
-        for (let i = 0; i < img.height / tileSize; i++) {
-            for (let j = 0; j < img.width / tileSize; j++) {
-                tiles.push(getCanvasBuffer(img, j * tileSize, i * tileSize, tileSize, tileSize));
-            }
-        }
-    }
-
-    function loadLevelData(json) {
-        for (const layer of json.layers) {
-            let tempLayer = [];
-
-            const data = layer.data;
-            const width = parseInt(layer.width);
-
-            for (let i = 0; i < data.length; i += width) {
-                tempLayer.push(data.slice(i, i + width));
-            }
-
-            layers[layer.name] = tempLayer;
-        }
-    }
-
-    function getCanvasBuffer(img, x, y, w, h) {
-        const frameCanvas = document.createElement('canvas');
-        frameCanvas.width = w;
-        frameCanvas.height = h;
-        const frameCtx = frameCanvas.getContext('2d');
-
-        frameCtx.drawImage(img, x, y, w, h, 0, 0, w, h);
-
-        return frameCanvas;
+    function onresize() {
+        size = parseInt(canvas.height / appConfig.tileCount);
+        offset.x = (layers['Layer1'][0].length * size - canvas.width) / 2;
+        offset.y = layers['Layer1'].length * size - canvas.height;
+        draw(canvas, ctx);
     }
 
     return {
         load: load,
-        stop: stop
+        stop: stop,
+        onresize: onresize
     };
 })();
