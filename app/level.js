@@ -70,6 +70,7 @@ class Player {
         if (appConfig.debug) {
             ctx.lineWidth = 2;
             ctx.strokeStyle = '#ff0000';
+
             ctx.beginPath();
             ctx.moveTo(this.x - offset.x + this.w / 2, this.y - offset.y);
             ctx.lineTo(this.x - offset.x + this.w / 2, this.y - offset.y + this.h);
@@ -95,6 +96,7 @@ const levelLoop = (function() {
 
     let lastUpdate;
     let updateId;
+    let finishTimeoutId;
 
     let player;
 
@@ -103,6 +105,7 @@ const levelLoop = (function() {
     let world, level;
 
     let tiles = [];
+    let objects = [];
 
     let layers = []; // Tile layers of level
     let layerBuffers = []; // Buffers for static layers
@@ -112,6 +115,7 @@ const levelLoop = (function() {
     let size = 0; // Tile size in px
 
     let score = 0;
+    let onFinished = false;
 
     let offset = { x: 0, y: 0 };
 
@@ -126,12 +130,13 @@ const levelLoop = (function() {
         if (!config.world) config.world = 1;
         if (!config.level) config.level = 1;
 
-        isPause = isStop = false;
+        isPause = isStop = onFinished = false;
         score = 0;
         keys = { 'right': false, 'left': false, 'up': false };
         offset = { x: 0, y: 0 };
         layers = [];
         layersOfObject = [];
+        objects = [];
 
         document.body.addEventListener('keydown', keydown, false);
         document.body.addEventListener('keyup', keyup, false);
@@ -158,13 +163,7 @@ const levelLoop = (function() {
         /* Create player animations */
         player.anims['stay'] = new AnimTiled(tiles, [19]);
         player.anims['run'] = new AnimTiled(tiles, [26, 27, 28, 29]);
-        player.anims['jump'] = new AnimTiled(tiles, [appConfig.tileSize]);
-
-        /* Player deafult params */
-        player.w = size;
-        player.h = size;
-        player.x = 0;
-        player.y = size * (map.length - 2);
+        player.anims['jump'] = new AnimTiled(tiles, [21]);
 
         /* Add dynamic objects */
         if (layersOfObject['Objects']) {
@@ -175,26 +174,30 @@ const levelLoop = (function() {
                 }
     
                 if (object['class'] == 'Lava') {
-    
+                    objects.push({type: 'Lava', x: object.x, y: object.y, width: object.width, height: object.height});
                 }
     
                 if (object['class'] == 'Finish') {
-    
+                    objects.push({type: 'Finish', x: object.x, y: object.y, width: object.width, height: object.height});
                 }
             }
         }
+
+        onresize();
 
         lastUpdate = performance.now();
         update();
     }
 
     function stop() {
-        //console.log('stop', updateId);
+        //console.log('stop', updateId, finishTimer);
         cancelAnimationFrame(updateId);
-        isStop = true;
+        if (finishTimeoutId) clearTimeout(finishTimeoutId);
 
         document.body.removeEventListener('keydown', keydown, false);
         document.body.removeEventListener('keyup', keyup, false);
+
+        isStop = true;
     }
 
     function update() {
@@ -245,7 +248,7 @@ const levelLoop = (function() {
         }
 
         player.x += player.vx * delta;
-        col(0);
+        checkCollision(0);
 
         if (!player.onGround) {
             player.vy += g * size;
@@ -264,11 +267,12 @@ const levelLoop = (function() {
             }
         }
         player.y += player.vy * delta;
-        col(1);
+        checkCollision(1);
 
         /** Update player state */
         if (player.onGround) {
             if (player.vx == 0) { player.state = 0; }
+
             if ((player.vx != 0) || (player.vx == 0 && (keys['right'] || keys['left']))) {
                 if (!(keys['right'] && keys['left'])) {
                     player.state = 1;
@@ -279,10 +283,28 @@ const levelLoop = (function() {
         }
 
         player.onWater = false;
-        for (let i = parseInt(player.y / size); i < (player.y + player.h) / size; i++) {
-            for (let j = parseInt(player.x / size); j < (player.x + player.w) / size; j++) {
-                if (layers['Water'] && layers['Water'][i][j] != 0) {
-                    player.onWater = true;
+        if (layers['Water']) {
+            for (let i = parseInt(player.y / size); i < (player.y + player.h) / size; i++) {
+                for (let j = parseInt(player.x / size); j < (player.x + player.w) / size; j++) {
+                    if (layers['Water'][i][j] != 0) {
+                        player.onWater = true;
+                        break;
+                    }
+                }
+                if (player.onWater) break;
+            }
+        }
+
+        for (const object of objects) {
+            if (player.x < object.cx + object.cw && player.x + player.w > object.cx) {
+                if (player.y < object.cy + object.ch && player.y + player.h > object.cy) {
+                    if (object.type == 'Lava') {
+                        
+                    }
+
+                    if (object.type == 'Finish' && !onFinished) {
+                        finish();
+                    }
                 }
             }
         }
@@ -324,8 +346,9 @@ const levelLoop = (function() {
         }
     }
 
-    function col(dir) {
+    function checkCollision(dir) {
         if (parseInt(player.y / size) < 0) return;
+
         if ((player.y + player.h) / size > map.length) {
             player.y = map.length * size - player.h;
         }
@@ -353,7 +376,7 @@ const levelLoop = (function() {
                 }
 
                 if (map[i][j] == 254) {
-                    appConfig.setLoop('menu');
+                    //appConfig.setLoop('menu');
                 }
 
                 if (dir == 0) {
@@ -409,6 +432,7 @@ const levelLoop = (function() {
             /* Level grid */
             ctx.lineWidth = 2;
             ctx.strokeStyle = '#ccc';
+
             ctx.beginPath();
             for (let i = 0; i < map.length; i++) {
                 ctx.moveTo(0, i * size - offset.y);
@@ -420,6 +444,15 @@ const levelLoop = (function() {
             }
             ctx.closePath();
             ctx.stroke();
+
+            /* Objects */
+            for (const object of objects) {
+                if (object.type == 'Lava') ctx.strokeStyle = '#f00';
+                else if (object.type == 'Finish') ctx.strokeStyle = '#ff0';
+                else  ctx.strokeStyle = '#0f0';
+
+                ctx.strokeRect(object.cx - offset.x, object.cy - offset.y, object.cw, object.ch);
+            }
         }
 
         /* Player */
@@ -453,7 +486,9 @@ const levelLoop = (function() {
             ctx.stroke();
 
             /* State */
-            ctx.lineWidth = 8;
+            ctx.lineJoin = 'round';
+            ctx.miterLimit = 2;
+            ctx.lineWidth = size / 5 / 2;
             ctx.strokeStyle = '#1c1c1c';
             ctx.textBaseline = 'middle';
             ctx.textAlign = 'center';
@@ -466,6 +501,12 @@ const levelLoop = (function() {
             ctx.strokeText('FPS: ' + fps.toFixed(1), canvas.width - 1 / 2 * size, 1 / 2 * size);
             ctx.fillText('FPS: ' + fps.toFixed(1), canvas.width - 1 / 2 * size, 1 / 2 * size);
         }
+    }
+
+    function finish() {
+        onFinished = true;
+
+        finishTimeoutId = setTimeout(function() {appConfig.setLoop('menu');}, 2000);
     }
 
     function keydown(e) {
@@ -517,6 +558,13 @@ const levelLoop = (function() {
 
         player.w = size;
         player.h = size;
+
+        for (const object of objects) {
+            object.cx = object.x * size / appConfig.tileSize;
+            object.cy = object.y * size / appConfig.tileSize;
+            object.cw = object.width * size / appConfig.tileSize;
+            object.ch = object.height * size / appConfig.tileSize;
+        }
     }
 
     return {
