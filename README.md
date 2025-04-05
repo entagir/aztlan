@@ -1,9 +1,9 @@
 <h1 align="center">Aztlan (2d platformer)</h1>
 
-<img src="https://entagir.ru/img/aztlan.png">
+<img src="https://entagir.xyz/img/aztlan1.png">
 
 
-<h2 align="center"><a  href="https://aztlan.entagir.ru">aztlan.entagir.ru</a></h2>
+<h2 align="center"><a  href="https://aztlan.entagir.xyz">aztlan.entagir.xyz</a></h2>
 
 ## Description
 Aztlan is a classic 2d platformer.
